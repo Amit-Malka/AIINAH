@@ -1,6 +1,15 @@
 # DMEO APP AIINAH - AI Medical Avatar & Live Health Dashboard
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/github/codespaces)
+
 A Next.js application featuring a real-time interactive AI Avatar (HeyGen) combined with a live medical telemetry dashboard. Designed for telehealth and patient monitoring scenarios.
+
+## Quick Start with Codespaces
+
+1.  Click the button above to open Codespaces.
+2.  Wait for installation to finish.
+3.  Run `npm run setup` in the terminal to configure your API key.
+4.  Run `npm run dev` to start the app.
 
 ## Key Features
 
