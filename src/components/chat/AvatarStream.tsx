@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Loader2, ArrowUp, Mic, MicOff } from 'lucide-react';
-import { StreamingEvents, TaskType } from '@heygen/streaming-avatar';
+import { Loader2, ArrowUp, Mic, MicOff, PhoneOff } from 'lucide-react';
+import { StreamingEvents } from '@heygen/streaming-avatar';
 import { ConversationManager } from '@/lib/ConversationManager';
 import type { SessionSummary } from '@/types/health';
 
@@ -13,6 +13,7 @@ interface AvatarStreamProps {
   avatar: any; // HeyGen StreamingAvatar instance
   onSessionDataUpdate?: (data: SessionData) => void;
   onSessionComplete?: (summary: SessionSummary) => void;
+  onEndSession: () => void;
 }
 
 export interface SessionData {
@@ -35,7 +36,8 @@ export const AvatarStream = ({
   videoRef,
   avatar,
   onSessionDataUpdate,
-  onSessionComplete
+  onSessionComplete,
+  onEndSession
 }: AvatarStreamProps) => {
   // Conversation Manager - The Brain
   const conversationManager = useRef<ConversationManager | null>(null);
@@ -57,6 +59,17 @@ export const AvatarStream = ({
   // Input State
   const [inputText, setInputText] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+
+  // Chat Overlay State
+  const [messages, setMessages] = useState<{ role: 'user' | 'avatar'; text: string }[]>([]);
+
+  const addMessage = useCallback((role: 'user' | 'avatar', text: string) => {
+    setMessages(prev => {
+      const newMsgs = [...prev, { role, text }];
+      if (newMsgs.length > 2) return newMsgs.slice(newMsgs.length - 2);
+      return newMsgs;
+    });
+  }, []);
 
   /**
    * Initialize Conversation Manager
@@ -86,6 +99,7 @@ export const AvatarStream = ({
 
       console.log('📝 Attempting avatar.speak()...');
       try {
+        addMessage('avatar', openingMessage); // Add to UI
         await avatar.speak({
           text: openingMessage,
           task_type: 'repeat',
@@ -127,6 +141,7 @@ export const AvatarStream = ({
 
     console.log('👤 User:', userText);
     setWaitingForUser(false);
+    addMessage('user', userText); // Add to UI
 
     try {
       // Process response through our logic engine
@@ -153,6 +168,8 @@ export const AvatarStream = ({
 
       // Avatar speaks the response
       setIsAvatarSpeaking(true);
+      addMessage('avatar', response.textToSpeak); // Add to UI
+
       await avatar.speak({
         text: response.textToSpeak,
         task_type: 'repeat',
@@ -263,6 +280,8 @@ export const AvatarStream = ({
     }
   }, [isConnected, hasStartedConversation, startHealthSession]);
 
+
+
   /**
    * Expose method for testing/manual user input
    * This allows parent components to simulate user responses
@@ -275,7 +294,18 @@ export const AvatarStream = ({
   }, [handleUserMessage]);
 
   return (
-    <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden">
+    <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden bg-black/10">
+      {/* End Session Button - Top Right */}
+      <div className="absolute top-4 right-4 z-50">
+        <button
+          onClick={onEndSession}
+          className="px-4 py-2 bg-rose-500/90 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-rose-600 transition-all shadow-lg active:scale-95"
+        >
+          <PhoneOff size={16} />
+          <span className="text-sm">End Session</span>
+        </button>
+      </div>
+
       {/* Loading State */}
       {isLoading && (
         <div className="z-10 flex flex-col items-center gap-6">
@@ -294,19 +324,36 @@ export const AvatarStream = ({
       {/* Actual Video */}
       <video
         ref={videoRef}
-        className={`w-full h-full object-contain transition-opacity duration-1000 ${isConnected ? 'opacity-100' : 'opacity-0'
+        className={`w-full h-full object-cover transition-opacity duration-1000 ${isConnected ? 'opacity-100' : 'opacity-0'
           }`}
         autoPlay
         playsInline
-        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       />
 
-
+      {/* Floating Chat Overlay - Last 2 Messages */}
+      {isConnected && messages.length > 0 && (
+        <div className="absolute bottom-32 w-full px-8 z-40 flex flex-col gap-3 pointer-events-none">
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`max-w-[45%] p-4 rounded-2xl backdrop-blur-md shadow-lg border border-white/10 animate-fade-in ${msg.role === 'user'
+                ? 'bg-blue-600/80 text-white self-end rounded-br-none'
+                : 'bg-black/60 text-white self-start rounded-bl-none'
+                }`}
+            >
+              <p className="text-sm font-medium leading-relaxed drop-shadow-sm">
+                {msg.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Interaction Controls - Floating Bottom Bar (WhatsApp Style) */}
       {isConnected && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 z-50">
-          <div className="bg-white rounded-full shadow-2xl flex items-center p-2 border border-slate-100 ring-4 ring-white/30 backdrop-blur-md">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-50">
+          <div className="bg-white/90 rounded-full shadow-2xl flex items-center p-2 border border-slate-100 ring-4 ring-white/30 backdrop-blur-md">
 
             {/* Input Field */}
             <input
@@ -316,7 +363,7 @@ export const AvatarStream = ({
               onKeyDown={(e) => e.key === 'Enter' && handleSendText()}
               placeholder={isVoiceMode ? "Listening..." : "Type a message..."}
               disabled={isVoiceMode || isAvatarSpeaking}
-              className="flex-1 bg-transparent border-none focus:ring-0 outline-none px-6 text-slate-800 placeholder:text-slate-400 text-lg font-medium disabled:opacity-50"
+              className="flex-1 bg-transparent border-none focus:ring-0 outline-none px-6 text-slate-800 placeholder:text-slate-500 text-lg font-medium disabled:opacity-50"
             />
 
             {/* Actions Group */}
